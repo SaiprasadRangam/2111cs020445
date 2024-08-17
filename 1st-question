@@ -1,1 +1,43 @@
 
+from flask import Flask, jsonify
+import requests
+from collections import deque
+app = Flask(__name__)
+WINDOW_SIZE = 10
+API_TIMEOUT = 0.5  
+THIRD_PARTY_API_URL = "http://20.244.56.144/test/auth"  
+numbers = deque(maxlen=WINDOW_SIZE)
+seen_numbers = set()
+
+def fetch_numbers(numberid):
+    try:
+        response = requests.get(f"{THIRD_PARTY_API_URL}/{numberid}", timeout=API_TIMEOUT)
+        response.raise_for_status()
+        return response.json()
+    except (requests.RequestException, ValueError):
+        return []
+
+@app.route('/numbers/<numberid>', methods=['GET'])
+def get_average(numberid):
+    global numbers
+    new_numbers = fetch_numbers(numberid)
+    for num in new_numbers:
+        if num not in seen_numbers:
+            if len(numbers) == WINDOW_SIZE:
+                removed_num = numbers.popleft()
+                seen_numbers.remove(removed_num)
+            numbers.append(num)
+            seen_numbers.add(num)
+    if numbers:
+        average = sum(numbers) / len(numbers)
+    else:
+        average = 0
+    response = {
+        'numbers_before': list(numbers),
+        'numbers_after': list(numbers),
+        'average': average
+    }
+    return jsonify(response)
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)
+
